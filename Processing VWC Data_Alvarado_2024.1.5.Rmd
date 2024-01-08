@@ -1,0 +1,51 @@
+```{r}
+library(readr)
+library(lubridate)
+library(zoo)
+library(dplyr)
+library(ggplot2)
+library(readxl)
+library(float)
+```
+
+
+```{r}
+#Set Working Directory so that files save back in folder
+setwd('C:/Users/aalvarado55/OneDrive - University of California Merced/00_Alvarado_ESF Junior Specialist/03_Data/02_Soil Moisture_Volumetric Water Content/')
+
+#Read Soil Moisture data file
+soilmoist<- XLConnect::readWorksheetFromFile('Em50-2 6Jun22-1247.xls',sheet = 1, colTypes=c("Date","numeric", "numeric", "numeric", "numeric", "numeric"))[-c(1:2),c(1,2,5,8,11)] %>%
+  mutate(`Em50.2` = as.Date(`Em50.2`, "%Y-%m-%d"))
+```
+
+
+```{r}
+
+#Organize points by day and calculate daily precipitation
+soilmoist_daily <- soilmoist %>%
+  group_by(`Em50.2`) %>%
+  summarize(`Port. 1` = mean(`Port.1`),
+            `Port. 2` = mean(`Port.2`),
+            `Port. 3` = mean(`Port.3`),
+            `Port. 4` = mean(`Port.4`)) %>%
+  reshape2::melt(., id = c("Em50.2"))
+soilmoist_daily
+```
+
+
+```{r}
+#Create line plot
+GraphVWC <- ggplot(soilmoist_daily, aes(x = Em50.2, y = value, color = variable)) +
+  geom_line()+
+  labs(title = "Soil Moisture", y = "volumetric water content (m³/m³)", x = "") +
+  scale_y_continuous(expand = c(0,0),
+                     labels = scales::comma) +
+  scale_x_date(expand = c(0,0))+
+  theme_bw()+
+  theme(plot.title = element_text(hjust = 0.5)) +
+  guides(color=guide_legend(title="Sensor"))
+
+ggsave("DailyVWC_2024.1.5.png", GraphVWC, dpi = 300,units="in", width=8,height=5)
+
+```
+
