@@ -1,0 +1,280 @@
+
+```{r}
+
+# Libraries --------------------------------------------------------------------
+library(readr)
+library(lubridate)
+library(zoo)
+library(dplyr)
+library(ggplot2)
+library(readxl)
+library(float)
+library(XLConnect)
+library(reshape)
+library(reshape2)
+library(MASS)
+library(ggplot2)
+
+
+```
+
+
+```{r}
+#Set Working Directory so that files save back in folder
+setwd('C:/Users/aalvarado55/OneDrive - University of California Merced/00_Alvarado_ESF Junior Specialist/03_Data/03_CO2bie Flux/')
+```
+
+
+```{r}
+# Importing uncalibrated values --------------------------------------------------------------------
+
+# Define the number of columns in your Excel file
+num_columns <- 5
+
+# Specify the column types for each column
+column_types <- c("date", rep("numeric", num_columns - 1))
+
+# Read the selected columns from the Excel file
+uncalibrated <- readxl::read_excel('Summary of ArcGIS Values_2.xlsx', col_types = column_types) %>%
+  mutate(Date = as.Date(esrignss_fixdatetime, "%Y-%m-%d"))%>%
+  filter(!is.na(Co2bie)) #remove rows where NA shows as value for Co2bie column
+uncalibrated
+
+# Read the selected columns from the Excel file
+#uncalibrated <- readxl::read_excel('Summary of ArcGIS Values_2.xlsx', col_types = column_types)%>%#[, c('esrignss_fixdatetime', 'Moisture', 'Temp', 'Flux', 'Co2bie')] %>%
+#  mutate(Date = as.Date(esrignss_fixdatetime, "%Y-%m-%d"))
+#uncalibrated
+
+#Remove unnecessary rows
+#uncalibrated2 <- uncalibrated[!grepl("Flux", uncalibrated$Flux), ] %>%
+#  subset(., !is.na(Co2bie) & Co2bie != "") %>% arrange(Co2bie, Date)
+#uncalibrated2
+```
+
+
+```{r}
+
+# Order uncalibrated values --------------------------------------------------------------------
+
+# Order the dataset by Co2bie and Date
+ordered_uncalibrated <- uncalibrated %>%
+  arrange(Co2bie, Date, esrignss_fixdatetime)
+
+# Create a Count column
+ordered_uncalibrated <- ordered_uncalibrated %>%
+  group_by(Co2bie, Date) %>%
+  mutate(Count = row_number())
+
+# Select the desired columns using dplyr's select function
+ordered_uncalibrated <- ordered_uncalibrated %>%
+  dplyr::select(Date, Count, Co2bie, Temp, Flux, Moisture)
+
+ordered_uncalibrated
+
+```
+
+
+```{r}
+# Importing calibrated values --------------------------------------------------------------------
+
+column_types <- c("date", "numeric", "date", "numeric","numeric","date", "numeric")
+
+calibrated <- readxl::read_excel('Summary Calibrated Flux Values_Requested_2.xlsx', col_types = column_types)[-1, c(1,2,4,5)] %>%
+  rename_with(~ 'Co2bie', matches("...5")) %>% 
+  mutate(Date = as.Date(Date))
+
+#calibrated <- readxl::read_excel('Summary Calibrated Flux Values_Requested_2.xlsx', col_types = column_types)[-1, c(1,2,4,5)] %>%
+#  rename('CO2bie' = '...5') %>% 
+#  mutate(Date = as.Date(Date))
+
+calibrated
+
+```
+
+
+```{r}
+# Merge calibrated and uncalibrated values --------------------------------------------------------------------
+
+# Merge datasets based on Date, Co2bie, and Count
+merged <- ordered_uncalibrated %>%
+  left_join(calibrated, by = c("Date", "Co2bie", "Count")) %>%
+  filter(!is.na(`CO2 efflux`)) %>%
+  ungroup()
+
+merged
+
+```
+
+
+```{r}
+# Creating graphs --------------------------------------------------------------------
+
+# Graph 1: Moisture vs. CO2 efflux
+graph1 <- ggplot(merged, aes(x = Moisture, y = `CO2 efflux`)) +
+  geom_point() +
+  theme_bw()+
+  labs(title = expression("Moisture vs. CO"[2]*" efflux"),
+       x = "Soil Moisture (m³/m³)",
+       y = expression("CO"[2]*" efflux ("*µ*mol/m^2*s*")"))
+
+# Graph 2: Temp vs. CO2 efflux
+graph2 <- ggplot(merged, aes(x = Temp, y = `CO2 efflux`)) +
+  geom_point() +
+  theme_bw()+
+  labs(title = expression("Temperature vs. CO"[2]*" efflux"),
+       x = "Temperature (F)",
+       y = expression("CO"[2]*" efflux ("*µ*mol/m^2*s*")"))
+
+# Print the graphs
+print(graph1)
+print(graph2)
+
+ggsave("Moisture vs. flux.png", graph1, dpi = 300,units="in", width=8,height=5)
+ggsave("Temp vs. flux.png", graph2, dpi = 300,units="in", width=8,height=5)
+
+```
+
+# TROUBLESHOOTING --------------------------------------------------------------------
+
+```{r}
+
+
+```
+
+
+
+
+
+
+
+
+
+--------------------------------------------------------------------------------------------------------------
+
+
+```{r}
+# Merge calibrated and uncalibrated values --------------------------------------------------------------------
+
+merged <- uncalibrated %>%
+  left_join(calibrated, by = c("Date", "Co2bie")) %>%
+  filter(!is.na(`CO2 efflux`)) %>%
+  group_by(Date, esrignss_fixdatetime) %>%
+  slice_min(Count) %>%
+#  select(Date.x, esrignss_fixdatetime, `CO2 efflux.y`, Moisture.x, Temp.x, Co2bie.x)
+
+# Rename the selected columns
+#colnames(merged) <- c("Date", "esrignss_fixdatetime", "Calibrated_CO2_efflux", "Moisture", "Temp", "Co2bie")
+
+# Print the resulting merged dataset
+print(merged)
+
+```
+
+
+```{r}
+# Creating graphs --------------------------------------------------------------------
+
+# Graph 1: Moisture vs. CO2 efflux
+graph1 <- ggplot(merged, aes(x = Moisture, y = `CO2 efflux`)) +
+  geom_point() +
+  labs(title = "Moisture vs. CO2 efflux",
+       x = "Moisture",
+       y = "CO2 efflux")
+
+# Graph 2: Temp vs. CO2 efflux
+graph2 <- ggplot(merged, aes(x = Temp, y = `CO2 efflux`)) +
+  geom_point() +
+  labs(title = "Temperature vs. CO2 efflux",
+       x = "Temperature",
+       y = "CO2 efflux")
+
+# Print the graphs
+print(graph1)
+print(graph2)
+
+ggsave("Moisture vs. flux.png", graph1, dpi = 300,units="in", width=8,height=5)
+ggsave("Temp vs. flux.png", graph2, dpi = 300,units="in", width=8,height=5)
+
+```
+
+
+```{r}
+# Creating graphs --------------------------------------------------------------------
+
+ggplot(merged) + geom_point(aes(x = Date, y = `CO2 efflux`)) + geom_point(aes(x = Date, y = `CO2 efflux`), color = "red") +
+  geom_point(aes(x = Date, y = `Flux`), color = "blue") + facet_wrap(~Co2bie)
+
+
+ggplot(merged) + geom_point(aes(x = Moisture, y = `CO2 efflux`)) + facet_wrap(~Co2bie)
+ggplot(merged) + geom_point(aes(x = Temp, y = `CO2 efflux`)) + facet_wrap(~Co2bie)
+
+```
+
+
+```{r}
+# TROUBLESHOOTING --------------------------------------------------------------------
+
+# Check unique values of "Date" and "Co2bie" in uncalibrated dataset
+unique_dates_uncalibrated <- unique(uncalibrated$Date)
+unique_co2bie_uncalibrated <- unique(uncalibrated$Co2bie)
+
+# Check unique values of "Date" and "Co2bie" in calibrated dataset
+unique_dates_calibrated <- unique(calibrated$Date)
+unique_co2bie_calibrated <- unique(calibrated$Co2bie)
+
+```
+
+
+```{r}
+# TROUBLESHOOTING --------------------------------------------------------------------
+
+# Extract unique dates from uncalibrated dataset
+unique_dates_uncalibrated <- unique(uncalibrated$Date)
+
+# Merge datasets based on Date
+merged <- uncalibrated %>%
+  left_join(calibrated, by = "Date") %>%
+  filter(Date %in% unique_dates_uncalibrated)
+
+# Print the resulting merged dataset
+print(merged)
+```
+
+
+```{r}
+# TROUBLESHOOTING --------------------------------------------------------------------
+
+# Merge datasets based on Sensor Number and Date
+merged <- uncalibrated %>%
+  left_join(calibrated, by = c("Date", "Co2bie")) %>%
+  filter(abs(difftime(esrignss_fixdatetime, Date, units = "hours")) < 1) # Adjust the time difference threshold as needed
+
+
+# Filter based on Chronological Order (using 'count' column)
+#merged <- uncalibrated %>%
+#  left_join(calibrated, by = c("Date", "Co2bie")) %>%
+#  filter(abs(difftime(esrignss_fixdatetime, Date, units = "mins")) < 1) # Adjust the time difference threshold as needed
+
+
+# View the resulting merged dataset
+merged
+```
+
+
+```{r}
+# Creating graphs --------------------------------------------------------------------
+
+merged <- merge(uncalibrated, calibrated, by = c("Date", "Co2bie"))
+merged
+
+ggplot(merged) + geom_point(aes(x = Date, y = `CO2 efflux`)) + geom_point(aes(x = Date, y = `CO2 efflux`), color = "red") +
+  geom_point(aes(x = Date, y = `Flux`), color = "blue") + facet_wrap(~Co2bie)
+
+
+ggplot(merged) + geom_point(aes(x = Moisture, y = `CO2 efflux`)) + facet_wrap(~Co2bie)
+ggplot(merged) + geom_point(aes(x = Temp, y = `CO2 efflux`)) + facet_wrap(~Co2bie)
+
+```
+
+```{r}
+```
